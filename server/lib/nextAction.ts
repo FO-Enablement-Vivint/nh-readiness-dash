@@ -82,11 +82,21 @@ export interface NextActionInput {
   decision: string | null;
   requiredActions: string | null;
   reassessmentDate: string | null;
+  /**
+   * ISO date the reassessment form opens: the reassessment date set on the
+   * previous round. Until it arrives the form is not offered, matching the
+   * FSM's reassessment email, which is sent on that date.
+   */
+  reassessmentOpensIso: string | null;
   /** Base Fillout URL for the WO Experience form, from WO_EXPERIENCE_FORM_URL. */
   woFormUrl: string | null;
   proRecordId: string;
   /** `New Hire Status`. Historical means the pro has left the program. */
   stage: string | null;
+}
+
+function todayInDenver(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Denver' });
 }
 
 export function resolveNextAction(i: NextActionInput): NextAction | null {
@@ -143,6 +153,17 @@ export function resolveNextAction(i: NextActionInput): NextAction | null {
         kind: 'reassessment-pending',
         label: 'A reassessment is coming',
         because: `Your FSM has asked you to re-do ${what}. They will send you the form.`,
+        href: null,
+        due: i.reassessmentDate,
+      };
+    }
+
+    const opens = i.reassessmentOpensIso?.slice(0, 10) ?? null;
+    if (opens && opens > todayInDenver()) {
+      return {
+        kind: 'reassessment-pending',
+        label: 'Your reassessment is coming',
+        because: `Your reassessment of ${what} opens on ${i.reassessmentDate ?? opens}, after your training.`,
         href: null,
         due: i.reassessmentDate,
       };

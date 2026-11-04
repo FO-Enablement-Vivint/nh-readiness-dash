@@ -44,6 +44,7 @@ const EVENT_FIELDS = [
   'nhAwaitingReassessment',
   'nhCategoriesAssigned',
   'nhReassessmentForm',
+  'previousRoundReassessmentDue',
 ] as const;
 
 const licenceSchema = z.object({
@@ -183,7 +184,12 @@ export default createEndpoint({
     // Null once the minimums are met. The field reads "None", not blank.
     const woShortfall = shortfallText(me.woExperienceGate);
     const requiredActions = firstString(event?.trRequiredActions);
-    const reassessmentDate = formatDate(event?.trReassessmentDateEmail);
+    // A later round carries no date of its own: the date was set on the round
+    // before it, so that is both when the form opens and what the card shows.
+    const reassessmentOpensIso = firstString(event?.previousRoundReassessmentDue);
+    const reassessmentDate =
+      formatDate(event?.trReassessmentDateEmail) ??
+      formatDate(reassessmentOpensIso);
     const selfAssessmentDue = formatDate(me.selfAssessmentDue);
 
     // Prerequisites for the self-assessment form, per Austi: required learning
@@ -236,6 +242,7 @@ export default createEndpoint({
       decision,
       requiredActions,
       reassessmentDate,
+      reassessmentOpensIso,
       woFormUrl: process.env.WO_EXPERIENCE_FORM_URL || null,
       proRecordId: me.id,
       stage: stage.label,
