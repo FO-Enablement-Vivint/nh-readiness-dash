@@ -23,7 +23,21 @@
  */
 import { firstString } from './readiness';
 
+/**
+ * Which form (or non-form step) the action points at. The Assessments card
+ * reads this so its statuses can never disagree with the button.
+ */
+export type NextActionKind =
+  | 'self-assessment'
+  | 'reassessment'
+  | 'reassessment-pending'
+  | 'manager-redo'
+  | 'work-orders'
+  | 'development-plan'
+  | 'courses';
+
 export interface NextAction {
+  kind: NextActionKind;
   /** Short imperative, e.g. "Log a work order". */
   label: string;
   /** Plain-language reason, shown under the button. */
@@ -113,6 +127,7 @@ export function resolveNextAction(i: NextActionInput): NextAction | null {
       // a pro with nothing assigned to them that they were on the hook.
       if (i.eventStatus === 'Awaiting Assessments') {
         return {
+          kind: 'manager-redo',
           label: 'Your manager is finishing their assessment',
           because:
             'Your FSM is re-doing part of their readiness assessment. There is nothing for you to submit — you will hear from them once it is done.',
@@ -125,6 +140,7 @@ export function resolveNextAction(i: NextActionInput): NextAction | null {
       // events carry no reassessment URL. Say who to expect it from rather than
       // rendering a button that goes nowhere.
       return {
+        kind: 'reassessment-pending',
         label: 'A reassessment is coming',
         because: `Your FSM has asked you to re-do ${what}. They will send you the form.`,
         href: null,
@@ -133,6 +149,7 @@ export function resolveNextAction(i: NextActionInput): NextAction | null {
     }
 
     return {
+      kind: 'reassessment',
       label: 'Complete your reassessment',
       because: `Your FSM has asked you to re-do ${what}.`,
       href: i.reassessmentForm,
@@ -164,6 +181,7 @@ export function resolveNextAction(i: NextActionInput): NextAction | null {
     i.selfAssessmentScore === null
   ) {
     return {
+      kind: 'self-assessment',
       label: 'Complete your readiness self-assessment',
       because: 'You have reached the point in the program where you rate your own confidence.',
       href: i.selfAssessmentLink,
@@ -174,6 +192,7 @@ export function resolveNextAction(i: NextActionInput): NextAction | null {
   // 3. Work-order minimums unmet. The gate text names what is missing.
   if (!approved && i.woExperienceGate) {
     return {
+      kind: 'work-orders',
       label: 'Log a work order',
       because: `You still need ${i.woExperienceGate} work orders logged.`,
       href: woFormHref(i.woFormUrl, i.proRecordId),
@@ -185,6 +204,7 @@ export function resolveNextAction(i: NextActionInput): NextAction | null {
   //    arrange, so this is informational.
   if (!approved && (i.decision === 'Training Required' || i.eventStatus === 'Training Required')) {
     return {
+      kind: 'development-plan',
       label: 'Work through your development plan',
       because: i.requiredActions || 'Your FSM has set out additional training before your reassessment.',
       href: null,
@@ -195,6 +215,7 @@ export function resolveNextAction(i: NextActionInput): NextAction | null {
   // 5. Courses outstanding but nothing else due.
   if (!approved && i.trainingComplete && i.trainingComplete !== 'Complete') {
     return {
+      kind: 'courses',
       label: 'Finish your required courses',
       because: 'Your required learning has to be complete before a readiness decision can be made.',
       href: null,

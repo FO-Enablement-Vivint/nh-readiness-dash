@@ -23,8 +23,8 @@
 import { z } from 'zod';
 import { createEndpoint } from '../lib/endpoint';
 import { ReadinessEvent, Licensing, FsmProgressCheckIn, RequiredCourses } from '../airtable/index';
-import { cleanNumber, firstFlag, firstNumber, firstString, formatDate, shortfallText, stringList, resolveStage } from '../lib/readiness';
-import { resolveNextAction, woFormHref } from '../lib/nextAction';
+import { cleanNumber, firstFlag, firstNumber, firstString, formatDate, selfAssessmentStatus, fsmAssessmentStatus, type AssessmentStatus, shortfallText, stringList, resolveStage } from '../lib/readiness';
+import { resolveNextAction, woFormHref, type NextActionKind } from '../lib/nextAction';
 
 /**
  * The only Readiness Event fields this app may read. Keys, not Airtable names
@@ -81,11 +81,16 @@ const outputSchema = z.object({
   }),
 
   assessments: z.object({
+    /** Label for the pro's own row — "Reassessment" once a reassessment is the live form. */
+    selfAssessmentLabel: z.string(),
     selfAssessmentDue: z.string().nullable(),
     selfAssessmentLink: z.string().nullable(),
     selfAssessmentScore: z.number().nullable(),
     fsmAssessmentStatus: z.string().nullable(),
     fsmAssessmentDue: z.string().nullable(),
+    /** Resolved display statuses; null for a pro who has left with no record. */
+    selfStatus: z.enum(['Ready to Start', 'Overdue', 'Not Ready to Start', 'Submitted']).nullable(),
+    fsmStatus: z.enum(['Ready to Start', 'Overdue', 'Not Ready to Start', 'Submitted']).nullable(),
   }),
 
   workOrders: z.object({
@@ -128,6 +133,15 @@ const outputSchema = z.object({
 
   nextAction: z
     .object({
+      kind: z.enum([
+        'self-assessment',
+        'reassessment',
+        'reassessment-pending',
+        'manager-redo',
+        'work-orders',
+        'development-plan',
+        'courses',
+      ]),
       label: z.string(),
       because: z.string(),
       href: z.string().nullable(),
@@ -248,7 +262,19 @@ export default createEndpoint({
       },
 
       assessments: {
-        selfAssessmentDue,
+        ...assessmentRows({
+          kind: nextAction?.kind ?? null,
+          finished,
+          score: selfAssessmentScore,
+          selfDueIso: me.selfAssessmentDue,
+          reassessmentDueIso: event?.trReassessmentDateEmail,
+          fsmRaw: me.fsmAssessmentStatus,
+          unlocked: selfAssessmentUnlocked,
+        }),
+        selfAssessmentDue:
+          nextAction?.kind === 'reassessment' || nextAction?.kind === 'reassessment-pending'
+            ? reassessmentDate
+            : selfAssessmentDue,
         selfAssessmentLink: firstString(me.nhSelfAssessmentLink),
         selfAssessmentScore,
         fsmAssessmentStatus: firstString(me.fsmAssessmentStatus),
@@ -415,5 +441,47 @@ async function latestCheckIn(ids: string[]) {
     focus: named === 'Other' ? firstString(row.otherPrimaryFocus) || named : named,
     action: firstString(row.focusAction),
     targetDate: formatDate(row.focusTargetDate),
+  };
+}
+
+/**
+ * Labels and statuses for the Assessments card, driven by the same action the
+ * bottom button resolves to so the two cannot disagree. A reassessment being the
+ * live form turns the pro's row into a reassessment; the FSM redoing their own
+ * part (no form for the pro) is judged on the manager's formula alone, because
+ * the pro's prerequisites are irrelevant to something the pro is not doing.
+ *
+ * Null statuses mean the pro left the program with nothing on file.
+ */
+function assessmentRows(i: {
+  kind: NextActionKind | null;
+  finished: boolean;
+  score: number | null;
+  selfDueIso: unknown;
+  reassessmentDueIso: unknown;
+  fsmRaw: unknown;
+  unlocked: boolean;
+}) {
+  const reassessing = i.kind === 'reassessment' || i.kind === 'reassessment-pending';
+
+  let selfStatus: AssessmentStatus | null;
+  if (i.finished && i.score === null) selfStatus = null;
+  else if (i.kind === 'reassessment') {
+    const due = /^\d{4}-\d{2}-\d{2}/.exec(firstString(i.reassessmentDueIso) ?? '')?.[0] ?? null;
+    selfStatus = due && due < new Date().toISOString().slice(0, 10) ? 'Overdue' : 'Ready to Start';
+  } else if (i.kind === 'reassessment-pending') selfStatus = 'Not Ready to Start';
+  else selfStatus = selfAssessmentStatus({ submitted: i.score !== null, dueIso: i.selfDueIso, unlocked: i.unlocked });
+
+  const fsmRaw = firstString(i.fsmRaw);
+  let fsmStatus: AssessmentStatus | null;
+  if (i.finished && !fsmRaw) fsmStatus = null;
+  else if (i.kind === 'manager-redo') {
+    fsmStatus = fsmRaw === 'Completed' ? 'Submitted' : fsmRaw === 'Overdue' ? 'Overdue' : 'Ready to Start';
+  } else fsmStatus = fsmAssessmentStatus({ raw: fsmRaw, unlocked: i.unlocked });
+
+  return {
+    selfAssessmentLabel: reassessing ? 'Your Readiness Reassessment' : 'Your Readiness Self-Assessment',
+    selfStatus,
+    fsmStatus,
   };
 }

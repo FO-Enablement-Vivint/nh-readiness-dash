@@ -161,7 +161,7 @@ export type ReadinessStage = (typeof READINESS_STAGES)[number];
 /** Short rail labels — the full status names do not fit a phone width. */
 export const STAGE_SHORT_LABELS: Record<ReadinessStage, string> = {
   Training: 'Training',
-  'Readiness Review': 'Review',
+  'Readiness Review': 'Assessments',
   'Additional Training Required': 'Additional Training',
   Graduated: 'Graduated',
 };
@@ -204,4 +204,45 @@ export function toStage(value: unknown): { label: string; index: number | null }
   const label = firstString(value) || 'Training';
   const index = READINESS_STAGES.indexOf(label as ReadinessStage);
   return { label, index: index === -1 ? null : index };
+}
+
+export type AssessmentStatus = 'Ready to Start' | 'Overdue' | 'Not Ready to Start' | 'Submitted';
+
+/** Today as `YYYY-MM-DD` in UTC, matching how `formatDate` reads Airtable dates. */
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Status shown for the pro's own readiness self-assessment.
+ *
+ *   Submitted           the current event has a score
+ *   Not Ready to Start  prerequisites unmet, or no due date yet (not sent).
+ *                       Checked BEFORE overdue: a pro who cannot start the form
+ *                       is not late on it, and the action bar does not offer it.
+ *   Overdue             due date is before today
+ *   Ready to Start      everything else
+ */
+export function selfAssessmentStatus(i: {
+  submitted: boolean;
+  /** Raw `Self Assessment Due`, ISO. */
+  dueIso: unknown;
+  unlocked: boolean;
+}): AssessmentStatus {
+  if (i.submitted) return 'Submitted';
+  const due = /^\d{4}-\d{2}-\d{2}/.exec(firstString(i.dueIso) ?? '')?.[0] ?? null;
+  if (!due || !i.unlocked) return 'Not Ready to Start';
+  return due < todayIso() ? 'Overdue' : 'Ready to Start';
+}
+
+/**
+ * Status shown for the manager's readiness assessment, from the Airtable
+ * `FSM Assessment Status` formula: blank (not sent), Sent, Overdue, Completed.
+ * The same prerequisites gate it as the self-assessment.
+ */
+export function fsmAssessmentStatus(i: { raw: unknown; unlocked: boolean }): AssessmentStatus {
+  const raw = firstString(i.raw);
+  if (raw === 'Completed') return 'Submitted';
+  if (!raw || !i.unlocked) return 'Not Ready to Start';
+  return raw === 'Overdue' ? 'Overdue' : 'Ready to Start';
 }

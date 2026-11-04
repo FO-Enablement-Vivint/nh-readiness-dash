@@ -223,8 +223,8 @@ function LicensingCard({ licensing }: { licensing: Readiness['licensing'] }) {
 function CoursesCards({ courses }: { courses: Readiness['courses'] }) {
   return (
     <>
-      <CourseGroupCard label="Ethics and Compliance" group={courses.ethics} />
-      <CourseGroupCard label="ProStart" group={courses.prostart} />
+      <CourseGroupCard label="Ethics and Compliance Modules" group={courses.ethics} />
+      <CourseGroupCard label="ProStart Modules" group={courses.prostart} />
       {courses.other.length ? (
         <StatusCard
           label="Other required courses"
@@ -282,25 +282,20 @@ function AssessmentsCard({
   event: Readiness['event'];
   finished: boolean;
 }) {
-  const submitted = assessments.selfAssessmentScore !== null;
+  const submitted = assessments.selfStatus === 'Submitted';
 
-  // These mirror the base. `FSM Assessment Status` and `Self Assessment Sent`
-  // record what was actually dispatched, so the page reports that rather than
-  // re-deriving eligibility: a pro holding the email should not be told the
-  // form does not exist. Whether the form is *offered* is a separate question,
-  // decided by the prerequisite gate in server/lib/nextAction.ts.
-  //
-  // "Not yet due" is a forward-looking claim, and false for someone who has
-  // left the program with no event on file. Observed on a Historical pro.
-  const selfValue = submitted ? 'Submitted' : assessments.selfAssessmentDue ? 'Due' : finished ? 'No record' : 'Not yet due';
-  const fsmValue = assessments.fsmAssessmentStatus || (finished ? 'No record' : 'Not started');
+  // Statuses are resolved server-side (selfAssessmentStatus / fsmAssessmentStatus
+  // in server/lib/readiness.ts). Null means the pro left the program with
+  // nothing on file, so there is no "not ready" state worth showing.
+  const selfValue = assessments.selfStatus ?? 'No record';
+  const fsmValue = assessments.fsmStatus ?? 'No record';
 
   return (
     <Card>
       <p className="card-label">Assessments</p>
       <dl className="mt-2 space-y-2 text-sm">
         <Row
-          term="Your self-assessment"
+          term={assessments.selfAssessmentLabel}
           value={selfValue}
           detail={assessments.selfAssessmentDue && !submitted ? `due ${assessments.selfAssessmentDue}` : null}
         />
@@ -309,7 +304,7 @@ function AssessmentsCard({
           result, confidence gap — are withheld by §9 and are not fetched.
         */}
         <Row
-          term="Manager readiness check"
+          term="Manager Readiness Assessment"
           value={fsmValue}
           detail={assessments.fsmAssessmentDue ? `due ${assessments.fsmAssessmentDue}` : null}
         />

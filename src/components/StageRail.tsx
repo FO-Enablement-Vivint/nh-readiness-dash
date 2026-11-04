@@ -12,7 +12,12 @@
  */
 import { READINESS_STAGES, STAGE_SHORT_LABELS } from '@server/lib/readiness';
 
-export default function StageRail({ label, index }: { label: string; index: number | null }) {
+export default function StageRail({ label: rawLabel, index }: { label: string; index: number | null }) {
+  // `Historical` is the internal status for a pro who has left the program;
+  // to the pro it reads as finishing, so show "Complete". Only the display
+  // changes — the raw value is still what `finished` is detected from.
+  const label = rawLabel === 'Historical' ? 'Complete' : rawLabel;
+
   // An unrecognised status is shown as-is with no rail, rather than being
   // forced onto a step it does not belong on.
   if (index === null) {

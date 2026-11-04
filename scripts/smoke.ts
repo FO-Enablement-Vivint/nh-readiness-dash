@@ -48,7 +48,7 @@ async function run(email: string, note: string) {
   console.log(`  prostart   ${r.courses.prostart.complete ? 'complete' : r.courses.prostart.outstanding.join('; ')}`);
   if (r.courses.other.length) console.log(`  other      ${r.courses.other.join('; ')}`);
   console.log(`  WOs        install ${r.workOrders.install ?? '—'} / service ${r.workOrders.service ?? '—'} / total ${r.workOrders.total ?? '—'}  shortfall=${r.workOrders.shortfall ?? 'met'}`);
-  console.log(`  assess     self=${r.assessments.selfAssessmentScore ?? 'not submitted'} due=${r.assessments.selfAssessmentDue ?? '—'}  fsm=${r.assessments.fsmAssessmentStatus ?? '—'}`);
+  console.log(`  assess     self=${r.assessments.selfAssessmentScore ?? 'not submitted'} due=${r.assessments.selfAssessmentDue ?? '—'}  fsm=${r.assessments.fsmStatus ?? '—'} (raw ${r.assessments.fsmAssessmentStatus ?? '—'})  selfStatus=${r.assessments.selfStatus ?? '—'}`);
   console.log(`  event      ${r.event ? `${r.event.label ?? ''} ${r.event.status} awaiting=${r.event.awaitingReassessment}` : 'no event'}`);
   console.log(`  focus      ${r.focusThisWeek ? `${r.focusThisWeek.focus} (${r.focusThisWeek.checkInDate})` : 'not set'}`);
   console.log(`  remediate  ${r.remediation ? (r.remediation.developmentFocus ?? '').slice(0, 60) : 'n/a'}`);
