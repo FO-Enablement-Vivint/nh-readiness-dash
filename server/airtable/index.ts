@@ -12,12 +12,16 @@ import {
   FsmProgressCheckInTable,
   LicensingTable,
   RequiredCoursesTable,
+  NhSelfAssessmentTable,
+  FsmFinalAssessmentTable,
   type FieldOpsEml20RecordType,
   type ReadinessEventRecordType,
   type NhWoExperienceRecordType,
   type FsmProgressCheckInRecordType,
   type LicensingRecordType,
   type RequiredCoursesRecordType,
+  type NhSelfAssessmentRecordType,
+  type FsmFinalAssessmentRecordType,
 } from './schema.generated';
 
 export const FieldOpsEml20 = defineTable<FieldOpsEml20RecordType>(FieldOpsEml20Table);
@@ -26,6 +30,8 @@ export const NhWoExperience = defineTable<NhWoExperienceRecordType>(NhWoExperien
 export const FsmProgressCheckIn = defineTable<FsmProgressCheckInRecordType>(FsmProgressCheckInTable);
 export const Licensing = defineTable<LicensingRecordType>(LicensingTable);
 export const RequiredCourses = defineTable<RequiredCoursesRecordType>(RequiredCoursesTable);
+export const NhSelfAssessment = defineTable<NhSelfAssessmentRecordType>(NhSelfAssessmentTable);
+export const FsmFinalAssessment = defineTable<FsmFinalAssessmentRecordType>(FsmFinalAssessmentTable);
 
 export type {
   FieldOpsEml20RecordType,
@@ -34,4 +40,6 @@ export type {
   FsmProgressCheckInRecordType,
   LicensingRecordType,
   RequiredCoursesRecordType,
+  NhSelfAssessmentRecordType,
+  FsmFinalAssessmentRecordType,
 };

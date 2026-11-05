@@ -107,20 +107,30 @@ The doc's §9 matrix for the NH role:
 |---|---|
 | WO Forms | Own |
 | NH Self-Assessment | Own |
-| FSM Assessment | **No** |
+| FSM Assessment | ~~No~~ **Own, contents visible (changed — see below)** |
 | RM Audit | **No** |
 | Calibration Results | **No** |
 
-Enforced by **not fetching** restricted fields:
+**Deviation from §9, to be confirmed with Austi.** The doc has FSM Assessment as
+`No` for the NH role. That was widened on request so a new hire can open their
+own FSM's assessment and see the answers, category scores, notes, readiness
+result and coaching/training plan. It is served by
+[`getMyAssessments.ts`](server/api/getMyAssessments.ts), which reads only the
+pro's own latest assessment and requests an explicit allow-list of fields.
+Still withheld: `Confidence Gap`, `Eligibility Exception`, `Intervention Link`,
+RM Audit and every `Calibration *` field. **When the FSM's results become
+visible is not yet decided** — it lives in one function, `fsmResultsVisible()`,
+currently set to "once the FSM has submitted".
+
+Everything else is enforced by **not fetching** restricted fields:
 [`getMyReadiness.ts`](server/api/getMyReadiness.ts) passes an explicit `fields`
 projection to Airtable, so `FSM Overall Score`, `Confidence Gap`,
 `RM Review *`, `Eligibility Exception`, `Decision Reason`, `Link Check` and
 every `Calibration *` field never enter the process. Adding a field to
 `EVENT_FIELDS` is an access decision, not a UI tweak.
 
-One interpretation is flagged in that file: the doc asks this page to show the
-"manager readiness check", read here as the **status** of the FSM's assessment
-and not its contents.
+The Assessments card on the page still reports only the **status** of the FSM's
+assessment; the contents are behind a tap, served by the endpoint above.
 
 The weekly check-in is handled the same way — only the forward-looking focus
 fields the requirement names are read, not the FSM's readiness concerns,

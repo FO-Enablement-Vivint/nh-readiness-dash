@@ -75,3 +75,6 @@ export type GetMyReadinessOutputType = OutputOf<'getMyReadiness'>;
 
 export const getMyFieldExperience = endpoint('getMyFieldExperience');
 export type GetMyFieldExperienceOutputType = OutputOf<'getMyFieldExperience'>;
+
+export const getMyAssessments = endpoint('getMyAssessments');
+export type GetMyAssessmentsOutputType = OutputOf<'getMyAssessments'>;

@@ -27,6 +27,8 @@ const TABLES = [
   'FSM Progress Check-in',
   'Licensing',
   'Required Courses',
+  'NH Self-Assessment',
+  'FSM Final Assessment',
 ];
 
 type MetaField = {

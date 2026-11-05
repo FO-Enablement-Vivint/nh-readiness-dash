@@ -9,16 +9,18 @@
  * all. Adding a field to `EVENT_FIELDS` is therefore a deliberate access
  * decision, not a UI tweak.
  *
+ * Note: the FSM assessment's CONTENTS are now shown to the new hire, but by a
+ * separate endpoint (getMyAssessments), not this one. This endpoint still
+ * returns only the assessment's status. See the README's access section.
+ *
  * Deliberately NOT fetched: fsmOverallScore, fsmReadinessResult,
  * confidenceGap, rmReviewRequired, rmReviewReasons, rmReviewStatus, rmAudits,
  * auditNotReadyReason, approvalRoute, decisionReason, linkCheck,
  * eligibilityException, and every calibration* field.
  *
- * One interpretation is flagged: the doc asks this page to show the "manager
- * readiness check", which is read here as the *status* of the FSM's assessment
- * (sent / submitted / outstanding) and not its contents. Status answers "what
- * happens next before I can work independently"; contents are the thing §9
- * withholds.
+ * The page's "manager readiness check" row is the *status* of the FSM's
+ * assessment (sent / submitted / outstanding); its contents come from
+ * getMyAssessments.
  */
 import { z } from 'zod';
 import { createEndpoint } from '../lib/endpoint';

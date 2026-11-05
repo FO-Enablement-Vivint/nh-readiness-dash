@@ -12,15 +12,22 @@
  *   My field experience  job-type counts and distribution, experience areas,
  *                        participation trend, who the pro has trained with
  *
- * The page shows no FSM scores, no confidence gap, no audit data and no
+ * The page itself shows no FSM scores, no confidence gap, no audit data and no
  * calibration metrics. That is §9 of the governance doc, not a layout choice,
  * and it is enforced server-side — those fields are never fetched.
+ *
+ * The one exception is the Assessments card: tapping a row opens the contents
+ * of that assessment (own self-assessment, and the FSM's assessment of the pro)
+ * from getMyAssessments. That widens §9 for the FSM assessment; see the README.
+ * Confidence gap, audit and calibration data are still never fetched.
  */
 import { useEffect, useState } from 'react';
 import {
+  getMyAssessments,
   getMyFieldExperience,
   getMyReadiness,
   ApiClientError,
+  type GetMyAssessmentsOutputType,
   type GetMyFieldExperienceOutputType,
   type GetMyReadinessOutputType,
 } from '@/lib/api';
@@ -28,12 +35,15 @@ import { Card, CountList, EMPTY, SectionHeading, StatusCard } from '@/components
 import { Donut, Ladder, ProportionBar } from '@/components/Charts';
 import StageRail from '@/components/StageRail';
 import ActionBar from '@/components/ActionBar';
+import AssessmentDetail from '@/components/AssessmentDetail';
 
 /** Licensing is not a readiness requirement; the card is built but hidden from users. */
 const SHOW_LICENSING = false;
 
 type Readiness = GetMyReadinessOutputType;
 type Experience = GetMyFieldExperienceOutputType;
+type AssessmentDetails = GetMyAssessmentsOutputType;
+type DetailKind = 'self' | 'fsm';
 
 export default function MyReadiness() {
   const [readiness, setReadiness] = useState<Readiness | null>(null);
@@ -41,6 +51,8 @@ export default function MyReadiness() {
   const [error, setError] = useState<string | null>(null);
   const [experienceFailed, setExperienceFailed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [details, setDetails] = useState<AssessmentDetails | null>(null);
+  const [openDetail, setOpenDetail] = useState<DetailKind | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +82,18 @@ export default function MyReadiness() {
     };
   }, []);
 
+  // Assessment contents are optional extras behind a tap. A failure here only
+  // means the rows are not tappable; it must never take the page down.
+  useEffect(() => {
+    let cancelled = false;
+    getMyAssessments({})
+      .then(d => !cancelled && setDetails(d))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (loading) return <Shell><p className="card-note px-1">Loading your readiness…</p></Shell>;
   if (error) return <Shell><Card><p className="text-sm leading-relaxed text-slate-700">{error}</p></Card></Shell>;
   if (!readiness) return null;
@@ -93,6 +117,8 @@ export default function MyReadiness() {
         assessments={readiness.assessments}
         event={readiness.event}
         finished={readiness.finished}
+        details={details}
+        onOpen={setOpenDetail}
       />
       <WorkOrdersCard workOrders={readiness.workOrders} finished={readiness.finished} />
       {readiness.finished ? null : <FocusCard focus={readiness.focusThisWeek} />}
@@ -160,6 +186,14 @@ export default function MyReadiness() {
       ) : null}
 
       <ActionBar action={readiness.nextAction} />
+
+      {openDetail && details?.[openDetail] ? (
+        <AssessmentDetail
+          title={openDetail === 'self' ? readiness.assessments.selfAssessmentLabel : 'Manager Readiness Assessment'}
+          assessment={details[openDetail]!}
+          onClose={() => setOpenDetail(null)}
+        />
+      ) : null}
     </Shell>
   );
 }
@@ -280,10 +314,14 @@ function AssessmentsCard({
   assessments,
   event,
   finished,
+  details,
+  onOpen,
 }: {
   assessments: Readiness['assessments'];
   event: Readiness['event'];
   finished: boolean;
+  details: AssessmentDetails | null;
+  onOpen: (kind: DetailKind) => void;
 }) {
   const submitted = assessments.selfStatus === 'Submitted';
 
@@ -301,15 +339,19 @@ function AssessmentsCard({
           term={assessments.selfAssessmentLabel}
           value={selfValue}
           detail={assessments.selfAssessmentDue && !submitted ? `due ${assessments.selfAssessmentDue}` : null}
+          onOpen={details?.self ? () => onOpen('self') : undefined}
         />
         {/*
-          The FSM's assessment STATUS only. Its contents — scores, readiness
-          result, confidence gap — are withheld by §9 and are not fetched.
+          The status comes from this endpoint. The assessment's contents open
+          from getMyAssessments (answers, category scores, readiness result),
+          which is the §9 widening described in the README. Confidence gap, audit
+          and calibration data are not fetched anywhere.
         */}
         <Row
           term="Manager Readiness Assessment"
           value={fsmValue}
           detail={assessments.fsmAssessmentDue ? `due ${assessments.fsmAssessmentDue}` : null}
+          onOpen={details?.fsm ? () => onOpen('fsm') : undefined}
         />
         {event ? (
           <Row
@@ -445,14 +487,59 @@ function ParticipationCard({ participation }: { participation: Experience['parti
   );
 }
 
-function Row({ term, value, detail }: { term: string; value: string; detail?: string | null }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <dt className="text-slate-600">{term}</dt>
-      <dd className="text-right">
-        <span className="font-medium text-slate-900">{value}</span>
-        {detail ? <span className="block text-xs text-slate-500">{detail}</span> : null}
+function Row({
+  term,
+  value,
+  detail,
+  onOpen,
+}: {
+  term: string;
+  value: string;
+  detail?: string | null;
+  /** When set the row is a tap target that opens the assessment's contents. */
+  onOpen?: () => void;
+}) {
+  const tappable = Boolean(onOpen);
+
+  const body = (
+    <>
+      <dt className={`text-slate-600 ${tappable ? 'pt-1.5' : ''}`}>{term}</dt>
+      <dd className="flex flex-col items-end text-right">
+        {/* Only the status is outlined, so it reads as the thing to tap. */}
+        {tappable ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600 px-3 py-1 font-semibold text-emerald-700 transition-colors group-hover:bg-emerald-600 group-hover:text-white group-focus-visible:bg-emerald-600 group-focus-visible:text-white">
+            {value}
+            <span className="text-base leading-none transition-transform group-hover:translate-x-0.5" aria-hidden>
+              ›
+            </span>
+          </span>
+        ) : (
+          <span className="font-medium text-slate-900">{value}</span>
+        )}
+        {detail ? <span className={`block text-xs text-slate-500 ${tappable ? 'mt-1' : ''}`}>{detail}</span> : null}
       </dd>
+    </>
+  );
+
+  if (!onOpen) return <div className="flex items-baseline justify-between gap-3">{body}</div>;
+
+  // A div with button semantics rather than a <button>: a <dl> may only contain
+  // dt/dd (optionally in a div), and a button cannot hold them. The whole row
+  // is the tap target; the outlined status is the visual cue.
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="group -mx-2 flex cursor-pointer items-start justify-between gap-3 rounded-xl px-2 py-1 transition-colors hover:bg-slate-50 active:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+    >
+      {body}
     </div>
   );
 }
