@@ -275,7 +275,16 @@ export default createEndpoint({
           score: selfAssessmentScore,
           selfDueIso: me.selfAssessmentDue,
           reassessmentDueIso: event?.trReassessmentDateEmail,
-          fsmRaw: me.fsmAssessmentStatus,
+          // The Airtable status formula returns blank whenever `FSM Assessment
+          // Sent Date` is empty, even if a submission is on file (Ben Barker:
+          // submitted 2026-11-05, never marked sent). Only in that case is the
+          // submission used directly; once a sent date exists the formula's own
+          // check (submitted on or after sent) is trusted, so a stale earlier
+          // submission cannot mask an Overdue.
+          fsmRaw:
+            !firstString(me.fsmAssessmentSentDate) && firstString(me.fsmAssessmentSubmittedDate)
+              ? 'Completed'
+              : me.fsmAssessmentStatus,
           unlocked: selfAssessmentUnlocked,
         }),
         selfAssessmentDue:

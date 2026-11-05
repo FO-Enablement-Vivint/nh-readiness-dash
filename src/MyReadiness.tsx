@@ -29,6 +29,9 @@ import { Donut, Ladder, ProportionBar } from '@/components/Charts';
 import StageRail from '@/components/StageRail';
 import ActionBar from '@/components/ActionBar';
 
+/** Licensing is not a readiness requirement; the card is built but hidden from users. */
+const SHOW_LICENSING = false;
+
 type Readiness = GetMyReadinessOutputType;
 type Experience = GetMyFieldExperienceOutputType;
 
@@ -84,7 +87,7 @@ export default function MyReadiness() {
 
       <SectionHeading>My progress</SectionHeading>
 
-      <LicensingCard licensing={readiness.licensing} />
+      {SHOW_LICENSING ? <LicensingCard licensing={readiness.licensing} /> : null}
       <CoursesCards courses={readiness.courses} />
       <AssessmentsCard
         assessments={readiness.assessments}
