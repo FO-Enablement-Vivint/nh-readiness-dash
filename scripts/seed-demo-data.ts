@@ -167,7 +167,7 @@ async function seed(): Promise<void> {
       const rec = await NhWoExperience.create({
         record: {
           employee: [pro],
-          personShadowed: [r.shadow],
+          woFieldTrainer: [r.shadow],
           jobType: r.jobType,
           experienceAreas: r.areas,
           highestParticipation: r.part,

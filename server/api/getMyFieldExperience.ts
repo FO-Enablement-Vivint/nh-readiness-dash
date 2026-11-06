@@ -77,7 +77,7 @@ export default createEndpoint({
 
     const jobTypes = tally(rows.map(r => firstString(r.jobType)));
     const areas = tally(rows.flatMap(r => expandAreas(r)));
-    const trainedWith = tally(rows.map(r => firstString(r.shadowedName)));
+    const trainedWith = tally(rows.map(r => firstString(r.trainerName)));
 
     return {
       totalWorkOrders: rows.length,
@@ -85,7 +85,7 @@ export default createEndpoint({
       experienceAreas: areas,
       participation: participationTrend(rows),
       trainedWith,
-      unattributed: rows.filter(r => !stringList(r.personShadowed).length).length,
+      unattributed: rows.filter(r => !stringList(r.woFieldTrainer).length).length,
       missingAreas: rows.filter(r => !stringList(r.experienceAreas).length).length,
     };
   },
@@ -110,8 +110,8 @@ async function allWoRows(proRecordId: string) {
         'jobType',
         'experienceAreas',
         'otherExperienceAreas',
-        'personShadowed',
-        'shadowedName',
+        'woFieldTrainer',
+        'trainerName',
         'highestParticipation',
         'participationRank',
         'workOrderDate',

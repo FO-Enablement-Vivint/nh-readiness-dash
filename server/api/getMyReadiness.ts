@@ -171,7 +171,7 @@ export default createEndpoint({
       latestEvent(eventIds),
       licenceRows(licenceIds),
       latestCheckIn(checkInIds),
-      outstandingCourses(courseIds),
+      outstandingCourses(courseIds, firstString(me.directorZone)),
     ]);
 
     const decision = firstString(event?.readinessDecision);
@@ -182,7 +182,14 @@ export default createEndpoint({
     // one arrives as `[0]`. firstFlag reads that as false; Boolean(firstString)
     // read it as true and told pros a reassessment was coming when it was not.
     const awaitingReassessment = firstFlag(event?.nhAwaitingReassessment);
-    const trainingComplete = firstString(me.newHireTrainingComplete);
+    // `New Hire Training Complete` counts ProStart | Feedback and the ProStart
+    // proficiency checks, which the app does not show. When only those are
+    // holding it at Incomplete, the app reports the modules as complete.
+    const baseTrainingComplete = firstString(me.newHireTrainingComplete);
+    const trainingComplete =
+      baseTrainingComplete === 'Incomplete' && !courses.requiredOutstanding
+        ? 'Complete'
+        : baseTrainingComplete;
     // Null once the minimums are met. The field reads "None", not blank.
     const woShortfall = shortfallText(me.woExperienceGate);
     const requiredActions = firstString(event?.trRequiredActions);
@@ -266,8 +273,10 @@ export default createEndpoint({
 
       courses: {
         trainingComplete,
-        coursesLeft: cleanNumber(me.coursesLeft),
-        ...courses,
+        coursesLeft: hiddenAdjusted(cleanNumber(me.coursesLeft), courses.hiddenCount),
+        ethics: courses.ethics,
+        prostart: courses.prostart,
+        other: courses.other,
       },
 
       assessments: {
@@ -367,6 +376,16 @@ function programWeek(v: unknown): string | null {
 }
 
 /**
+ * Courses the app never shows: `ProStart | Feedback` and the ProStart
+ * proficiency checks (Parts 1-4). They stay in the base; the app ignores them.
+ */
+const HIDDEN_COURSE = /^prostart\s*\|\s*feedback\b|^prostart\s*\|.*proficiency check/i;
+
+function hiddenAdjusted(left: number | null, hidden: number): number | null {
+  return left === null ? null : Math.max(0, left - hidden);
+}
+
+/**
  * The pro's outstanding required courses, split into the two families
  * governance §1 names separately: "Ethics and Compliance" and "ProStart".
  *
@@ -382,30 +401,49 @@ function programWeek(v: unknown): string | null {
  * ("does `New Hire Training Complete` cover both course families?") answerable
  * from the data, which it was not before.
  */
-async function outstandingCourses(ids: string[]) {
+async function outstandingCourses(ids: string[], zone: string | null) {
   const empty = {
     ethics: { complete: true, outstanding: [] as string[] },
     prostart: { complete: true, outstanding: [] as string[] },
     other: [] as string[],
+    hiddenCount: 0,
+    requiredOutstanding: false,
   };
   if (!ids.length) return empty;
 
   const page = await RequiredCourses.findAll({
     filters: { id: { in: ids } },
-    fields: ['name'],
+    fields: ['name', 'requiredDth', 'requiredFs'],
     limit: 100,
   });
 
-  const titles = page.records.map(r => firstString(r.name)).filter((t): t is string => Boolean(t));
+  const rows = page.records
+    .map(r => ({
+      title: firstString(r.name),
+      requiredDth: r.requiredDth === true,
+      requiredFs: r.requiredFs === true,
+    }))
+    .filter((r): r is typeof r & { title: string } => Boolean(r.title));
 
+  const shown = rows.filter(r => !HIDDEN_COURSE.test(r.title));
+  const titles = shown.map(r => r.title);
   const ethics = titles.filter(t => /^ethics\b/i.test(t));
   const prostart = titles.filter(t => /^prostart\b/i.test(t));
   const other = titles.filter(t => !/^(ethics|prostart)\b/i.test(t));
+
+  // Mirrors `New Hire Training Complete`: a course blocks only when it is
+  // required for the pro's zone (DTH, or East/Central/West for FS).
+  const isFs = zone === 'East' || zone === 'Central' || zone === 'West';
+  const requiredOutstanding = shown.some(r =>
+    zone === 'DTH' ? r.requiredDth : isFs ? r.requiredFs : false,
+  );
 
   return {
     ethics: { complete: ethics.length === 0, outstanding: ethics },
     prostart: { complete: prostart.length === 0, outstanding: prostart },
     other,
+    hiddenCount: rows.length - shown.length,
+    requiredOutstanding,
   };
 }
 
