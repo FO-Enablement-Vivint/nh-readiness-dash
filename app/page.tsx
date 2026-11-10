@@ -37,6 +37,8 @@ export default async function Page() {
     );
   }
 
+  console.log(env.isProd);
+
   // Locally, with no identity chosen, Magistrate is opt-in. The provider's
   // redirect client navigates the whole document to FPM the moment it mounts,
   // which would carry the box away with it — you cannot pick an identity from

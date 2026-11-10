@@ -38,7 +38,7 @@ import ActionBar from '@/components/ActionBar';
 import AssessmentDetail from '@/components/AssessmentDetail';
 
 /** Licensing is not a readiness requirement; the card is built but hidden from users. */
-const SHOW_LICENSING = false;
+const SHOW_LICENSING = true;
 
 type Readiness = GetMyReadinessOutputType;
 type Experience = GetMyFieldExperienceOutputType;

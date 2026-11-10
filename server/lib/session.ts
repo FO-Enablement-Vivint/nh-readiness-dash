@@ -68,6 +68,8 @@ export interface Session {
  * Airtable interface.
  */
 export async function getSession(): Promise<Session | null> {
+  const { session } = await magistrateGetSession();
+  console.log(session);
   // Local overrides, impossible in production.
   if (!env.isProd) {
     // TEMPORARY: the "Preview as" box. Checked before the env overrides so a
@@ -81,12 +83,24 @@ export async function getSession(): Promise<Session | null> {
     const recordId = env.devUserRecordId.trim();
     if (recordId) return { email: '', recordId };
 
+    // Names are optional and only matter for the legal-name backup match in
+    // eml.ts, which runs when the email finds nothing. A real Magistrate
+    // session always supplies them; this lets that path be tried locally.
     const devEmail = env.devUserEmail.trim();
-    if (devEmail) return { email: devEmail };
+    if (devEmail) {
+      return {
+        email: devEmail,
+        firstName: env.devUserFirstName.trim() || undefined,
+        lastName: env.devUserLastName.trim() || undefined,
+      };
+    }
   }
 
-  const { session } = await magistrateGetSession();
+  
   if (!session?.email) return null;
+  
+  console.log("session.ts");
+  console.log(session);
 
   return {
     email: session.email,

@@ -18,8 +18,9 @@
  *
  * The join key is WORK_EMAIL. That is an assumption worth stating plainly:
  * it requires the address SSO provides to equal the one Workday feeds into
- * EML. Where it does not, this returns FORBIDDEN naming the address that
- * failed rather than rendering an empty page. Run `npm run email:match` to
+ * EML. Where it does not, a narrow backup match on LEGAL_FULL_NAME applies
+ * (see findEmlRecordByLegalName); failing that this returns FORBIDDEN naming
+ * the address that failed rather than rendering an empty page. Run `npm run email:match` to
  * measure the match rate across the In Training view before go-live.
  */
 import { FieldOpsEml20, type FieldOpsEml20RecordType } from '../airtable/index';
@@ -78,6 +79,60 @@ async function findEmlRecordCaseInsensitive(lowerEmail: string): Promise<FieldOp
   return page.records[0] ?? null;
 }
 
+/**
+ * Backup match on LEGAL_FULL_NAME, for pros the email join cannot reach.
+ *
+ * A name is a weaker identity than an email, so this is deliberately narrow:
+ *
+ *  - it only runs after the email lookup found nothing;
+ *  - it only considers rows whose WORK_EMAIL is not a valid address (e.g. the
+ *    literal "UNKNOWN"), so it can never attach a signed-in person to someone
+ *    who has a working email on file — those are reachable by email, and a
+ *    namesake must not be able to land on them;
+ *  - it needs exactly one match, and refuses on two rather than guessing.
+ *
+ * What it cannot rule out: a different employee with the same name signing in
+ * while the real one's WORK_EMAIL is still broken. Fixing the email in EML
+ * removes the need for this for that person. Every use is logged.
+ */
+async function findEmlRecordByLegalName(
+  firstName: string | undefined,
+  lastName: string | undefined,
+): Promise<FieldOpsEml20RecordType | null> {
+  const name = [firstName, lastName]
+    .map(p => (p || '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+  // Both parts are required: a lone first name would match far too widely.
+  if (!firstName?.trim() || !lastName?.trim() || !name) return null;
+
+  const key = `name:${name}`;
+  const hit = cache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.record;
+
+  const page = await FieldOpsEml20.findAll({
+    formula:
+      `AND(LOWER(TRIM({LEGAL_FULL_NAME} & "")) = ${JSON.stringify(name)}, ` +
+      // No backslashes, so the pattern survives formula string escaping.
+      `NOT(REGEX_MATCH({WORK_EMAIL} & "", "^[^ @]+@[^ @]+[.][^ @]+$")))`,
+    limit: 2,
+  });
+  if (page.records.length > 1) {
+    throw new ApiError({
+      code: 'CONFLICT',
+      message:
+        `More than one Field Ops EML 2.0 record carries the legal name "${name}" with no usable work email. ` +
+        'Readiness data cannot be shown until the work email is corrected.',
+    });
+  }
+
+  const record = page.records[0] ?? null;
+  cache.set(key, { record, expires: Date.now() + CACHE_TTL_MS });
+  return record;
+}
+
 /** Drops a cached row, so the next request re-reads it from Airtable. */
 export function forgetEmlRecord(email: string): void {
   cache.delete(email.trim().toLowerCase());
@@ -113,7 +168,15 @@ export async function requireNewHire(session: Session): Promise<RequestUser> {
     throw new ApiError({ code: 'UNAUTHORIZED', message: 'Not signed in' });
   }
 
-  const record = await findEmlRecord(email);
+  let record = await findEmlRecord(email);
+  if (!record) {
+    record = await findEmlRecordByLegalName(session.firstName, session.lastName);
+    if (record) {
+      console.warn(
+        `[eml] matched ${email} to ${record.id} by legal name; its WORK_EMAIL is not a valid address and should be corrected`,
+      );
+    }
+  }
   if (!record) {
     throw new ApiError({
       code: 'FORBIDDEN',

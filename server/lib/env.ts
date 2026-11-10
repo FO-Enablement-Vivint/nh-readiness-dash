@@ -29,5 +29,7 @@ export const env = {
   airtableApiKey: req('AIRTABLE_API_KEY'),
   airtableBaseId: process.env.AIRTABLE_BASE_ID,
   devUserEmail: process.env.DEV_USER_EMAIL || '',
+  devUserFirstName: process.env.DEV_USER_FIRST_NAME || '',
+  devUserLastName: process.env.DEV_USER_LAST_NAME || '',
   devUserRecordId: process.env.DEV_USER_RECORD_ID || '',
 };
