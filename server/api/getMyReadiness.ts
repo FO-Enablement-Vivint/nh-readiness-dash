@@ -450,15 +450,24 @@ async function outstandingCourses(ids: string[], zone: string | null) {
 async function licenceRows(ids: string[]) {  if (!ids.length) return [];
   const page = await Licensing.findAll({
     filters: { id: { in: ids } },
-    fields: ['licenseName', 'licenseStateAbbr', 'licenseStatusC', 'expirationDateC'],
+    fields: ['licenseName', 'licenseStateAbbr', 'licenseStatus', 'licenseStatusC', 'expirationDateC'],
     limit: 100,
   });
-  return page.records.map(r => ({
-    name: firstString(r.licenseName),
-    state: firstString(r.licenseStateAbbr),
-    status: firstString(r.licenseStatusC),
-    expires: formatDate(r.expirationDateC),
-  }));
+  return page.records.map(r => {
+    const expiry = firstString(r.expirationDateC);
+    return {
+      name: firstString(r.licenseName),
+      state: firstString(r.licenseStateAbbr),
+      // `License Status` is the maintained field ("Active" / "In Progress"). The
+      // older LICENSE_STATUS__C ("Active" / "Started/Not yet active") maps to it
+      // one-to-one, so it is only a fallback for a blank.
+      status: firstString(r.licenseStatus) || firstString(r.licenseStatusC),
+      // A licence that has not started carries a placeholder expiry of
+      // 2000-01-01 (409 of the first 6,000 records), which is not a date the
+      // pro should be shown. Anything dated 2000 or earlier is treated as none.
+      expires: expiry && Number(expiry.slice(0, 4)) > 2000 ? formatDate(expiry) : null,
+    };
+  });
 }
 
 /**

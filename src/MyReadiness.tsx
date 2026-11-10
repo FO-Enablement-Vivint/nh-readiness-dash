@@ -38,7 +38,7 @@ import ActionBar from '@/components/ActionBar';
 import AssessmentDetail from '@/components/AssessmentDetail';
 
 /** Licensing is not a readiness requirement; the card is built but hidden from users. */
-const SHOW_LICENSING = true;
+const SHOW_LICENSING = false;
 
 type Readiness = GetMyReadinessOutputType;
 type Experience = GetMyFieldExperienceOutputType;
@@ -223,25 +223,35 @@ function LicensingCard({ licensing }: { licensing: Readiness['licensing'] }) {
     );
   }
 
-  // Any non-active licence is the headline, because that is the one that
-  // blocks. "Active" is only meaningful when it is true of all of them.
-  const problem = licensing.find(l => (l.status || '').toLowerCase() !== 'active');
+  // "Active" is only meaningful when it is true of all of them. Otherwise the
+  // headline counts the active ones rather than copying one licence's status,
+  // which read as if every licence were in that state. A lone licence has no
+  // count to give, so its own status is the headline.
+  const isActive = (l: { status?: string | null }) => (l.status || '').toLowerCase() === 'active';
+  const notActive = licensing.filter(l => !isActive(l));
+  const headline =
+    notActive.length === 0
+      ? 'Active'
+      : licensing.length === 1
+        ? notActive[0].status || 'Needs attention'
+        : `${licensing.length - notActive.length} of ${licensing.length} complete`;
+
   return (
     <StatusCard
       label="Licensing"
-      value={problem ? problem.status || 'Needs attention' : 'Active'}
-      tone={problem ? 'warn' : 'good'}
-      note={
-        licensing.length === 1
-          ? [licensing[0].name, licensing[0].state].filter(Boolean).join(' · ')
-          : `${licensing.length} licences on file`
-      }
+      value={headline}
+      tone={notActive.length ? 'warn' : 'good'}
     >
       <ul className="mt-2 space-y-1">
         {licensing.map((l, i) => (
           <li key={`${l.name}-${i}`} className="flex items-baseline justify-between gap-3 text-sm">
             <span className="text-slate-700">{[l.name, l.state].filter(Boolean).join(' · ') || EMPTY}</span>
-            <span className="text-slate-500">{l.expires ? `exp ${l.expires}` : l.status || EMPTY}</span>
+            <span className="text-right">
+              <span className={`block font-medium ${isActive(l) ? 'text-emerald-700' : 'text-amber-700'}`}>
+                {l.status || EMPTY}
+              </span>
+              {l.expires ? <span className="block text-xs text-slate-500">exp {l.expires}</span> : null}
+            </span>
           </li>
         ))}
       </ul>
