@@ -21,6 +21,7 @@
  * from getMyAssessments. That widens §9 for the FSM assessment; see the README.
  * Confidence gap, audit and calibration data are still never fetched.
  */
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   getMyAssessments,
@@ -38,7 +39,7 @@ import ActionBar from '@/components/ActionBar';
 import AssessmentDetail from '@/components/AssessmentDetail';
 
 /** Licensing is not a readiness requirement; the card is built but hidden from users. */
-const SHOW_LICENSING = false;
+const SHOW_LICENSING = true;
 
 type Readiness = GetMyReadinessOutputType;
 type Experience = GetMyFieldExperienceOutputType;
@@ -241,6 +242,21 @@ function LicensingCard({ licensing }: { licensing: Readiness['licensing'] }) {
       label="Licensing"
       value={headline}
       tone={notActive.length ? 'warn' : 'good'}
+      action={
+        // One link for the whole card: the page lists every licence and what is
+        // pending on each, so it is not tied to any single row's status.
+        <Link
+          href="/licensing"
+          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors hover:text-white focus-visible:text-white ${
+            notActive.length
+              ? 'border-amber-600 text-amber-700 hover:bg-amber-600 focus-visible:bg-amber-600'
+              : 'border-emerald-600 text-emerald-700 hover:bg-emerald-600 focus-visible:bg-emerald-600'
+          }`}
+        >
+          View details
+          <span aria-hidden="true">›</span>
+        </Link>
+      }
     >
       <ul className="mt-2 space-y-1">
         {licensing.map((l, i) => (

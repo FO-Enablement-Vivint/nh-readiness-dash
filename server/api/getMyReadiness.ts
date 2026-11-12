@@ -24,6 +24,7 @@
  */
 import { z } from 'zod';
 import { createEndpoint } from '../lib/endpoint';
+import { byUrgency, LICENCE_FIELDS, licenceView } from '../lib/licensing';
 import { ReadinessEvent, Licensing, FsmProgressCheckIn, RequiredCourses } from '../airtable/index';
 import { cleanNumber, firstFlag, firstNumber, firstString, formatDate, selfAssessmentStatus, fsmAssessmentStatus, type AssessmentStatus, shortfallText, stringList, resolveStage } from '../lib/readiness';
 import { resolveNextAction, woFormHref, type NextActionKind } from '../lib/nextAction';
@@ -447,27 +448,14 @@ async function outstandingCourses(ids: string[], zone: string | null) {
   };
 }
 
-async function licenceRows(ids: string[]) {  if (!ids.length) return [];
+async function licenceRows(ids: string[]) {
+  if (!ids.length) return [];
   const page = await Licensing.findAll({
     filters: { id: { in: ids } },
-    fields: ['licenseName', 'licenseStateAbbr', 'licenseStatus', 'licenseStatusC', 'expirationDateC'],
+    fields: [...LICENCE_FIELDS],
     limit: 100,
   });
-  return page.records.map(r => {
-    const expiry = firstString(r.expirationDateC);
-    return {
-      name: firstString(r.licenseName),
-      state: firstString(r.licenseStateAbbr),
-      // `License Status` is the maintained field ("Active" / "In Progress"). The
-      // older LICENSE_STATUS__C ("Active" / "Started/Not yet active") maps to it
-      // one-to-one, so it is only a fallback for a blank.
-      status: firstString(r.licenseStatus) || firstString(r.licenseStatusC),
-      // A licence that has not started carries a placeholder expiry of
-      // 2000-01-01 (409 of the first 6,000 records), which is not a date the
-      // pro should be shown. Anything dated 2000 or earlier is treated as none.
-      expires: expiry && Number(expiry.slice(0, 4)) > 2000 ? formatDate(expiry) : null,
-    };
-  });
+  return page.records.map(licenceView).sort(byUrgency);
 }
 
 /**

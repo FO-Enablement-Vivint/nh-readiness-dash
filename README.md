@@ -122,6 +122,14 @@ RM Audit and every `Calibration *` field. **When the FSM's results become
 visible is not yet decided** — it lives in one function, `fsmResultsVisible()`,
 currently set to "once the FSM has submitted".
 
+**Licensing page (`/licensing`).** [`getMyLicensing.ts`](server/api/getMyLicensing.ts)
+returns the pro's own licences plus pending actions. The actions come from
+`PUBLIC_APPLICATION_OBSERVATION_S__C`, a `;`-separated tag string; only tags on
+the `PENDING_LICENSE_ACTIONS` list in [`server/lib/licensing.ts`](server/lib/licensing.ts)
+leave the server, and progress notes such as "License attached" are never
+returned. Licensing is still not a readiness requirement and feeds nothing in
+`nextAction.ts` or `readiness.ts`.
+
 Everything else is enforced by **not fetching** restricted fields:
 [`getMyReadiness.ts`](server/api/getMyReadiness.ts) passes an explicit `fields`
 projection to Airtable, so `FSM Overall Score`, `Confidence Gap`,

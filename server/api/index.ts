@@ -5,12 +5,14 @@
 // nothing else, so every endpoint is scoped to the caller's own EML record by
 // the gate in server/lib/eml.ts.
 import getMyAssessments from './getMyAssessments';
+import getMyLicensing from './getMyLicensing';
 import getMyFieldExperience from './getMyFieldExperience';
 import getMyReadiness from './getMyReadiness';
 
 export const endpoints = {
   getMyAssessments,
   getMyFieldExperience,
+  getMyLicensing,
   getMyReadiness,
 };
 

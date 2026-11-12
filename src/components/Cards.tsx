@@ -25,12 +25,15 @@ export function StatusCard({
   value,
   note,
   tone = 'neutral',
+  action,
   children,
 }: {
   label: string;
   value: ReactNode;
   note?: ReactNode;
   tone?: 'neutral' | 'good' | 'warn' | 'info';
+  /** Pinned to the top-right corner, level with the label (e.g. a link chip). */
+  action?: ReactNode;
   children?: ReactNode;
 }) {
   const bar = {
@@ -44,6 +47,7 @@ export function StatusCard({
     <Card className="relative overflow-hidden">
       <span className={`absolute inset-y-0 left-0 w-1 ${bar}`} aria-hidden />
       <div className="pl-2">
+        {action ? <div className="absolute right-3 top-3">{action}</div> : null}
         <p className="card-label">{label}</p>
         <p className="card-value">{value ?? EMPTY}</p>
         {note ? <p className="card-note">{note}</p> : null}
