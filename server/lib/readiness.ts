@@ -208,6 +208,17 @@ export function toStage(value: unknown): { label: string; index: number | null }
 
 export type AssessmentStatus = 'Ready to Start' | 'Overdue' | 'Not Ready to Start' | 'Submitted';
 
+/**
+ * True when an Airtable date (`2026-11-13` or `2026-11-13T00:00:00.000Z`) is
+ * before today in Denver. A date due today is not overdue until it has passed.
+ * Anything that is not a date is not overdue.
+ */
+export function isPastDue(value: unknown): boolean {
+  const iso = /^\d{4}-\d{2}-\d{2}/.exec(firstString(value) ?? '')?.[0];
+  if (!iso) return false;
+  return iso < new Date().toLocaleDateString('en-CA', { timeZone: 'America/Denver' });
+}
+
 /** Today as `YYYY-MM-DD` in UTC, matching how `formatDate` reads Airtable dates. */
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);

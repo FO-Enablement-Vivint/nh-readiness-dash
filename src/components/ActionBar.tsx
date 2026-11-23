@@ -17,7 +17,7 @@ import type { GetMyReadinessOutputType } from '@/lib/api';
 
 type NextAction = GetMyReadinessOutputType['nextAction'];
 
-export default function ActionBar({ action }: { action: NextAction }) {
+export default function ActionBar({ action, overdue = false }: { action: NextAction; overdue?: boolean }) {
   if (!action) return null;
 
   const body = (
@@ -43,7 +43,9 @@ export default function ActionBar({ action }: { action: NextAction }) {
         href={action.href}
         target="_blank"
         rel="noopener noreferrer"
-        className="block rounded-2xl bg-emerald-600 px-4 py-3 text-left text-white shadow-lg active:bg-emerald-700"
+        className={`block rounded-2xl px-4 py-3 text-left text-white shadow-lg ${
+          overdue ? 'bg-red-600 active:bg-red-700' : 'bg-emerald-600 active:bg-emerald-700'
+        }`}
       >
         {body}
       </a>

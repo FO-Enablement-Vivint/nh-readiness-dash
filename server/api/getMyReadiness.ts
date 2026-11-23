@@ -26,7 +26,7 @@ import { z } from 'zod';
 import { createEndpoint } from '../lib/endpoint';
 import { byUrgency, LICENCE_FIELDS, licenceView } from '../lib/licensing';
 import { ReadinessEvent, Licensing, FsmProgressCheckIn, RequiredCourses } from '../airtable/index';
-import { cleanNumber, firstFlag, firstNumber, firstString, formatDate, selfAssessmentStatus, fsmAssessmentStatus, type AssessmentStatus, shortfallText, stringList, resolveStage } from '../lib/readiness';
+import { cleanNumber, firstFlag, firstNumber, firstString, formatDate, isPastDue, selfAssessmentStatus, fsmAssessmentStatus, type AssessmentStatus, shortfallText, stringList, resolveStage } from '../lib/readiness';
 import { resolveNextAction, woFormHref, type NextActionKind } from '../lib/nextAction';
 
 /**
@@ -60,6 +60,14 @@ const licenceSchema = z.object({
 const courseGroupSchema = z.object({
   complete: z.boolean(),
   outstanding: z.array(z.string()),
+  /** The family's due date (`Ethics Due Date` / `ProStart Due Date`), formatted. */
+  dueDate: z.string().nullable(),
+  /**
+   * True when the due date has passed and a course that is REQUIRED for the
+   * pro's zone is still outstanding. Optional and deliberately hidden courses
+   * (ProStart | Feedback, the proficiency checks) never make a family overdue.
+   */
+  overdue: z.boolean(),
 });
 
 const outputSchema = z.object({
@@ -71,6 +79,12 @@ const outputSchema = z.object({
   finished: z.boolean(),
   /** True before the hire date, when week and day counts are not yet meaningful. */
   notStarted: z.boolean(),
+  /**
+   * The overall status shown on the stage card: "Tasks Overdue" when the
+   * Ethics or ProStart modules are overdue, otherwise "On Track". Null once the
+   * pro has left the program or before they start, when it would mean nothing.
+   */
+  taskStatus: z.enum(['On Track', 'Tasks Overdue']).nullable(),
 
   licensing: z.array(licenceSchema),
 
@@ -237,6 +251,10 @@ export default createEndpoint({
     const days = cleanNumber(me.daysInTraining);
     const notStarted = days !== null && days < 0;
 
+    // Ethics and ProStart are the only things that can make the status overdue.
+    const ethicsGroup = courseGroup(courses.ethics, me.ethicsDueDate, finished);
+    const prostartGroup = courseGroup(courses.prostart, me.prostartDueDate, finished);
+
     const nextAction = resolveNextAction({
       woExperienceGate: woShortfall,
       trainingComplete,
@@ -258,6 +276,37 @@ export default createEndpoint({
       stage: stage.label,
     });
 
+    const assessmentSummary = assessmentRows({
+    kind: nextAction?.kind ?? null,
+    finished,
+    score: selfAssessmentScore,
+    selfDueIso: me.selfAssessmentDue,
+    reassessmentDueIso: event?.trReassessmentDateEmail,
+    // The Airtable status formula returns blank whenever `FSM Assessment
+    // Sent Date` is empty, even if a submission is on file (Ben Barker:
+    // submitted 2026-11-05, never marked sent). Only in that case is the
+    // submission used directly; once a sent date exists the formula's own
+    // check (submitted on or after sent) is trusted, so a stale earlier
+    // submission cannot mask an Overdue.
+    fsmRaw:
+      !firstString(me.fsmAssessmentSentDate) && firstString(me.fsmAssessmentSubmittedDate)
+        ? 'Completed'
+        : me.fsmAssessmentStatus,
+    unlocked: selfAssessmentUnlocked,
+  });
+
+    // The overall status. Overdue Ethics/ProStart modules, or an overdue
+    // assessment (the pro's own self-assessment or their manager's), turn it
+    // red. Once the pro has left the program, or before they start, it means
+    // nothing and is not shown.
+    const anythingOverdue =
+      ethicsGroup.overdue ||
+      prostartGroup.overdue ||
+      assessmentSummary.selfStatus === 'Overdue' ||
+      assessmentSummary.fsmStatus === 'Overdue';
+    const taskStatus: 'On Track' | 'Tasks Overdue' | null =
+      finished || notStarted ? null : anythingOverdue ? 'Tasks Overdue' : 'On Track';
+
     return {
       name: firstString(me.preferredFullName) || firstString(me.legalFullName),
       // Program week and days-in-training are meaningless once someone has
@@ -269,36 +318,20 @@ export default createEndpoint({
       stage,
       finished,
       notStarted,
+      taskStatus,
 
       licensing: licences,
 
       courses: {
         trainingComplete,
         coursesLeft: hiddenAdjusted(cleanNumber(me.coursesLeft), courses.hiddenCount),
-        ethics: courses.ethics,
-        prostart: courses.prostart,
+        ethics: ethicsGroup,
+        prostart: prostartGroup,
         other: courses.other,
       },
 
       assessments: {
-        ...assessmentRows({
-          kind: nextAction?.kind ?? null,
-          finished,
-          score: selfAssessmentScore,
-          selfDueIso: me.selfAssessmentDue,
-          reassessmentDueIso: event?.trReassessmentDateEmail,
-          // The Airtable status formula returns blank whenever `FSM Assessment
-          // Sent Date` is empty, even if a submission is on file (Ben Barker:
-          // submitted 2026-11-05, never marked sent). Only in that case is the
-          // submission used directly; once a sent date exists the formula's own
-          // check (submitted on or after sent) is trusted, so a stale earlier
-          // submission cannot mask an Overdue.
-          fsmRaw:
-            !firstString(me.fsmAssessmentSentDate) && firstString(me.fsmAssessmentSubmittedDate)
-              ? 'Completed'
-              : me.fsmAssessmentStatus,
-          unlocked: selfAssessmentUnlocked,
-        }),
+        ...assessmentSummary,
         selfAssessmentDue:
           nextAction?.kind === 'reassessment' || nextAction?.kind === 'reassessment-pending'
             ? reassessmentDate
@@ -404,8 +437,8 @@ function hiddenAdjusted(left: number | null, hidden: number): number | null {
  */
 async function outstandingCourses(ids: string[], zone: string | null) {
   const empty = {
-    ethics: { complete: true, outstanding: [] as string[] },
-    prostart: { complete: true, outstanding: [] as string[] },
+    ethics: { complete: true, outstanding: [] as string[], requiredOutstanding: false },
+    prostart: { complete: true, outstanding: [] as string[], requiredOutstanding: false },
     other: [] as string[],
     hiddenCount: 0,
     requiredOutstanding: false,
@@ -435,16 +468,46 @@ async function outstandingCourses(ids: string[], zone: string | null) {
   // Mirrors `New Hire Training Complete`: a course blocks only when it is
   // required for the pro's zone (DTH, or East/Central/West for FS).
   const isFs = zone === 'East' || zone === 'Central' || zone === 'West';
-  const requiredOutstanding = shown.some(r =>
-    zone === 'DTH' ? r.requiredDth : isFs ? r.requiredFs : false,
-  );
+  const isRequired = (r: (typeof rows)[number]) =>
+    zone === 'DTH' ? r.requiredDth : isFs ? r.requiredFs : false;
+  const requiredOutstanding = shown.some(isRequired);
+  // Per family, the same test: is something still outstanding that is required?
+  const familyRequired = (family: RegExp) =>
+    shown.some(r => family.test(r.title) && isRequired(r));
 
   return {
-    ethics: { complete: ethics.length === 0, outstanding: ethics },
-    prostart: { complete: prostart.length === 0, outstanding: prostart },
+    ethics: {
+      complete: ethics.length === 0,
+      outstanding: ethics,
+      requiredOutstanding: familyRequired(/^ethics\b/i),
+    },
+    prostart: {
+      complete: prostart.length === 0,
+      outstanding: prostart,
+      requiredOutstanding: familyRequired(/^prostart\b/i),
+    },
     other,
     hiddenCount: rows.length - shown.length,
     requiredOutstanding,
+  };
+}
+
+/**
+ * A course family as the page sees it. Overdue needs all three: the due date
+ * has passed, a REQUIRED course in the family is still outstanding, and the pro
+ * is still in the program. The due fields are Airtable formulas and are passed
+ * through, not recomputed.
+ */
+function courseGroup(
+  g: { complete: boolean; outstanding: string[]; requiredOutstanding: boolean },
+  dueRaw: unknown,
+  finished: boolean,
+) {
+  return {
+    complete: g.complete,
+    outstanding: g.outstanding,
+    dueDate: formatDate(dueRaw),
+    overdue: !finished && g.requiredOutstanding && isPastDue(dueRaw),
   };
 }
 

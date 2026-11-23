@@ -31,7 +31,7 @@ export function StatusCard({
   label: string;
   value: ReactNode;
   note?: ReactNode;
-  tone?: 'neutral' | 'good' | 'warn' | 'info';
+  tone?: 'neutral' | 'good' | 'warn' | 'info' | 'bad';
   /** Pinned to the top-right corner, level with the label (e.g. a link chip). */
   action?: ReactNode;
   children?: ReactNode;
@@ -41,6 +41,7 @@ export function StatusCard({
     good: 'bg-emerald-500',
     warn: 'bg-amber-500',
     info: 'bg-sky-500',
+    bad: 'bg-red-500',
   }[tone];
 
   return (
@@ -49,7 +50,7 @@ export function StatusCard({
       <div className="pl-2">
         {action ? <div className="absolute right-3 top-3">{action}</div> : null}
         <p className="card-label">{label}</p>
-        <p className="card-value">{value ?? EMPTY}</p>
+        <p className={`card-value ${tone === 'bad' ? '!text-red-700' : ''}`}>{value ?? EMPTY}</p>
         {note ? <p className="card-note">{note}</p> : null}
         {children}
       </div>

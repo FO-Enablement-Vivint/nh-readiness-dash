@@ -108,7 +108,7 @@ export default function MyReadiness() {
         ) : null}
       </header>
 
-      <StageRail label={readiness.stage.label} index={readiness.stage.index} />
+      <StageRail label={readiness.stage.label} index={readiness.stage.index} taskStatus={readiness.taskStatus} />
 
       <SectionHeading>My progress</SectionHeading>
 
@@ -186,7 +186,15 @@ export default function MyReadiness() {
         </>
       ) : null}
 
-      <ActionBar action={readiness.nextAction} />
+      <ActionBar
+        action={readiness.nextAction}
+        // The bottom button goes red when what it asks for is the overdue
+        // self-assessment (or reassessment).
+        overdue={
+          readiness.assessments.selfStatus === 'Overdue' &&
+          (readiness.nextAction?.kind === 'self-assessment' || readiness.nextAction?.kind === 'reassessment')
+        }
+      />
 
       {openDetail && details?.[openDetail] ? (
         <AssessmentDetail
@@ -306,15 +314,31 @@ function CourseGroupCard({
   group,
 }: {
   label: string;
-  group: { complete?: boolean; outstanding?: string[] };
+  group: { complete?: boolean; outstanding?: string[]; dueDate?: string | null; overdue?: boolean };
 }) {
   const outstanding = group.outstanding ?? [];
   const complete = outstanding.length === 0;
+  // Red only when a required course is past due (decided server-side); an
+  // outstanding optional course keeps the usual amber.
+  const tone = complete ? 'good' : group.overdue ? 'bad' : 'warn';
+  // The due date is the thing the pro acts on, so it is a chip rather than a
+  // line of grey note text; overdue ones are solid red.
+  const note =
+    complete || !group.dueDate ? undefined : (
+      <span
+        className={`inline-block rounded-xl px-2.5 py-1 text-xs font-semibold leading-snug ${
+          group.overdue ? 'bg-red-600 text-white' : 'bg-amber-100 text-amber-800'
+        }`}
+      >
+        {group.overdue ? `Overdue · was due ${group.dueDate}` : `Due ${group.dueDate}`}
+      </span>
+    );
   return (
     <StatusCard
       label={label}
       value={complete ? 'Complete' : `${outstanding.length} outstanding`}
-      tone={complete ? 'good' : 'warn'}
+      tone={tone}
+      note={note}
     >
       {complete ? null : <CourseList titles={outstanding} />}
     </StatusCard>
@@ -526,6 +550,8 @@ function Row({
   onOpen?: () => void;
 }) {
   const tappable = Boolean(onOpen);
+  // An overdue status is red; everything else keeps the page's green.
+  const overdue = value === 'Overdue';
 
   const body = (
     <>
@@ -533,14 +559,20 @@ function Row({
       <dd className="flex flex-col items-end text-right">
         {/* Only the status is outlined, so it reads as the thing to tap. */}
         {tappable ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600 px-3 py-1 font-semibold text-emerald-700 transition-colors group-hover:bg-emerald-600 group-hover:text-white group-focus-visible:bg-emerald-600 group-focus-visible:text-white">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-semibold transition-colors group-hover:text-white group-focus-visible:text-white ${
+              overdue
+                ? 'border-red-600 text-red-700 group-hover:bg-red-600 group-focus-visible:bg-red-600'
+                : 'border-emerald-600 text-emerald-700 group-hover:bg-emerald-600 group-focus-visible:bg-emerald-600'
+            }`}
+          >
             {value}
             <span className="text-base leading-none transition-transform group-hover:translate-x-0.5" aria-hidden>
               ›
             </span>
           </span>
         ) : (
-          <span className="font-medium text-slate-900">{value}</span>
+          <span className={`font-medium ${overdue ? 'text-red-700' : 'text-slate-900'}`}>{value}</span>
         )}
         {detail ? <span className={`block text-xs text-slate-500 ${tappable ? 'mt-1' : ''}`}>{detail}</span> : null}
       </dd>
